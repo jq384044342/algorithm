@@ -215,7 +215,33 @@ public static boolean isCBT(Node head){
 **如何判断一颗二叉树是否是满二叉树**
 
 ```java
-
+//满二叉树，某层2^n-1节点数
+public class Info{
+    int height;
+    int nodes;
+    public info(int h,int n){
+        height = h;
+        nodes = n;
+    }
+}
+public Info process(Node x){
+    if(null == x){
+        return new Info(0,0);
+    }
+    Info left = process(x.left);
+    Info right = process(x.right);
+    int height = Math.max(left.height,right.height)+1;
+    int nodes = left.nodes+right.nodes+1;
+    
+    return new Info(height,nodes);
+}
+public boolean isFST(Node head){
+    if(null == head){
+        return true;
+    }
+    Info info = process(head);
+    return (1<<info.height)-1==nodes?true;false;
+}
 ```
 
 **如何判断一颗二叉树是否是平衡二叉树**
@@ -248,6 +274,52 @@ public static ReturnType process(Node x){
 
 **给定两个二叉树的节点node1和node2，找他们的最低公共祖先节点**
 
+```java
+//o1、o2一定属于head为头的数
+//返回o1和o2最低公共祖先
+//第一种算法
+public static Node lowestAncestor(Node head,Node o1,Node o2){
+    if(head==null||head == o1||head==o2){
+        return head;
+    }
+    Node left = lowestAncestor(head.left,o1,o2);
+    Node right = lowestAncestor(head.right,o1,o2);
+    if(left!=null&&right!=null){
+        return head;
+    }
+    //左右两棵树，并不都有返回值
+    return left!=null?left:right;
+}
+//遍历树，将树的父节点放入map中。将o1的父节点链放入set中，然后依次遍历02的父节点，直到第一次出现在o1的父节点set中，那么该节点就是最低公告祖先节点
+public static Node lca(Node head,Node o1,Node o2){
+    HashMap<Node,Node>() parentMap = new HashMap<>();
+    parentMap.put(head,head);
+    process(head,parentMap);
+    HashSet<Node> set = new HashSet<>();
+    Node cur = o1;
+    while(cur != head){
+        set.put(cur);
+        cur = parentMap.get(cur);
+    }
+    set.add(head);
+    cur = o2;
+    while(!set.contains(cur)){
+        cur = parentMap.get(cur);
+    }
+    return cur;
+}
+public static void process(Node head,HashMap<Node,Node> map){
+    if(head == null){
+        return;
+    }
+    map.put(head.left,head);
+    map.put(head.right,head);
+    process(head.left,map);
+    process(head.right,map);
+}
+
+```
+
 **在二叉树中找到一个节点的后继节点**
 
 【题目】现在有一种新的二叉树节点类型如下
@@ -272,11 +344,71 @@ public calss Node{
 
 **在二叉树的中序遍历的序列中，node的下一个节点叫做node的后继节点。**
 
+```java
+//1)x有右树，x的后继是右树最左节点 2）x无右树找到第一个左树的父节点，如果没有就返回空
+public static getSuccessorNode(Node node){
+    if(node == null){
+        return node;
+    }
+    if(node.right!=null){
+        return getLeftMost(node.right);
+    }else{
+        Node parent = node.parent;
+        while(parent!=null&&parent.left!=node){
+            node = parent;
+            parent = node.parent;
+        }
+        return parent;
+    }
+}
+public static Node getLeftMost(Node node){
+    if(node == null){
+        return node;
+    }
+    while(node.left!=null){
+        node = node.left;
+    }
+    return node;
+}
+```
+
 ———————————————————————————————————————————
 
 **二叉树的序列化和反序列化**
 
 **就是内存里的一棵树如何变成字符串形式，又如何从字符串形式变成内存里的树**
+
+```java
+//先序序列化
+public static String serialByPre(Node head){
+    if(head==null){
+        return "#_";
+    }
+    String res = head.value+"_";
+    res +=serialByPre(head.left);
+    res +=serialByPre(head.right);
+    return res
+}
+//先序反序列化
+public static Node reconByPreString(String preStr){
+    String[] value = preStr.split("_");
+    Queue<String> queue= new LinkedList<>();
+    for(int i=0;i<value.length;i++){
+        queue.add(value[i]);
+    }
+    return reconPreOrder(queue);
+}
+public static Node reconPreOrder(Queue<String> queue){
+    String value = queue.poll();
+    if(value.equals("#")){
+        return null;
+    }
+    Node head = New Node(Integer.valueof(value));
+    head.left = reconPreOrder(queue);
+    head.right = reconPreOrder(queue);
+    return head;
+}
+```
 
 **如何判断一颗二叉树是不是另一颗二叉树的子树？**
 
@@ -297,3 +429,20 @@ public calss Node{
 **请从上到下打印所有折痕的方向。**
 
 **例如:N=1时，打印:downN=2时，打印:down down up**
+
+```java
+public static void printAllFolds(int N){
+    printProcess(1,N,true);
+}
+//递归过程，来到了某一节点
+//i是节点的层数，N是一共的层数，down==true凹 down==false凸
+public static void printProcess(int i,int N,boolead down){
+    if(i>N){
+        return;
+    }
+    printProcess(i+1,N,true);
+    System.out.println(down?"凹":"凸");
+    printProcess(i+1,N,false);
+}
+```
+
