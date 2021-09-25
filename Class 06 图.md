@@ -283,7 +283,7 @@ public static HashMap<Node, Integer> dijkstra1(Node head){
         for (Edge edge : minNode.edges){
             Node toNode = edge.to;
             if (!distanceMap.containsKey(toNode)){
-                a distanceMap.put(toNode, distance + edge.weight);
+                distanceMap.put(toNode, distance + edge.weight);
             } 
             distanceMap.put(edge.to,Math.min(distanceMap.get(toNode),distance t edge.weight));
             selectedNodes.add(minNode);
@@ -293,9 +293,27 @@ public static HashMap<Node, Integer> dijkstra1(Node head){
     }
     
     public Static Node getMinDistanceAndUnselectedNode(HashMap<Node, Integer> distanceMap,HashSet<Node> selectedNodes){
-        
+        Node minNode = null;
+        int minDistance = Integer.MAX_VALUE;
+        for(Entry<Node,Integer> entry:distanceMap.entrySet()){
+            Node node = entey.getKey();
+            int distance = entry.getValue();
+            if(!touchedNodes.contains(node)&&distance<minDistance){
+                minNode = node;
+                minDistance = distance;
+            }
+        }
+        return minNode;
     }
 
+    public static class NodeRecord{
+        public Node node;
+        public int distance;
+        public NodeRecord(Node node,int distance){
+            this.node = node;
+            this.distance = distance;
+        }
+    }
         
 }
 ```
