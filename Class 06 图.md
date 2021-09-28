@@ -314,7 +314,100 @@ public static HashMap<Node, Integer> dijkstra1(Node head){
             this.distance = distance;
         }
     }
+    
+    private void sawp(int index1,int index2){
+        headIndexMap.put(nodes[index1],index2);
+        headIndexMap.put(nodes[index2],index1);
+        Node tmp = nodes[index1];
+        nodes[index1] = nodes[index2];
+        nodes[index2] = tmp;
+    }
+    
+    //改进后的dijkstra算法
+    //从head出发，所有head能到达的节点，生成到达每个节点的最小路径记录并返回
+    public static HashMap<Node,Integer> dijkstra2(Node head,int size){
+        NodeHeap nodeHeap = new NodeHeap(size);
+        nodeHeap.addOrUpdateOrIgnore(head,0);
+        HashMap<Node,Integer> result = new HashMap<>();
+        while(!nodeHeap.isEmpty()){
+            NodeRecord record = nodeHeap.pop();
+            Node cur = record.node;
+            int distance = record.distance;
+            for(Edge edge : cur.edges){
+                nodeHeap.addOrUpdateOrIgnore(edge.to, edge.weight+distance);
+            }
+            result.put(cur.distance);
+        }
+        return result;
+    }
+    
+    public static class NodeHeap{
+        private Node[] nodes;//堆节点
+        private HashMap<Node,Integer> heapIndexMap;//堆上的位置
+        private HashMap<Node,Integer> distanceMap;
+        private int size;
         
+        public NodeHeap(int size){
+            nodes = new Node[size];
+            heapIndexMap = new HashMap<>();
+            distanceMap = new HashMap<>();
+            this.size = 0;
+        }
+        
+        public boolean isEmpty(){
+            return this.size==0;
+        }
+        
+        //-1表示进过堆map，但是弹出了
+        private boolean isEntered(Node node){
+            return heapIndeMap.containsKey(node);
+        }
+        private boolean inHeap(Node node){
+            return isEntered(node) && heapIndexMap.get(node) !=-1;
+        }
+        
+        public void addOrUpdateOrIgnore(Node node,int distance){
+            if(inHeap(node)){
+                distanceMap.put(node,Math.min(distanceMap.get(node),distance));
+                insertHeapify(node,headIndexMap.get(node));
+            }
+            if(!isEntered(node)){
+                nodes[size] = node;
+                heapIndexMap.put(node,size);
+                distanceMap.put(node,distance);
+                insertHeapify(node,size++);
+            }
+        }
+    }
+    private void insertHeapify(Node node,int index){
+        while(distanceMap.get(nodes[index])<distanceMap.get(nodes[(index-1)/2])){
+            swap(index,(index-1)/2);
+            index = (index-1)/2;
+        }
+    }
+    private void heapify(int index,int size){
+        int left = index*2 +1;
+        while(left<size){
+            int smallest = left+1<size&&distanceMap.get(nodes[left+1])<distance;
+            smallest = distanceMap.get(nodes[smallest])<distanceMap.get(node[index]);
+            if(smallest == index){
+                break;
+            }
+            swap(smallest,index);
+            index = smallest;
+            left = index * 2 +1;
+        }
+    }
+    
+    public NodeRecord pop(){
+        NodeRecord nodeRecord = new NodeRecord(nodes[0],distanceMap.get(nodes[0]));
+        swap(0,size-1);
+        heapIndexMap.put(nodes[size-1],-1);
+        distanceMap.remove(nodes[size -1]);
+        nodes[size -1] = null;
+        heapify(0,--size);
+        return nodeRecord;
+    }
 }
 ```
 
