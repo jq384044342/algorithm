@@ -491,3 +491,518 @@ noCompressionUserAgents="gozilla, traviata"： 对于以下的浏览器，不启
 
  https://tomcat.apache.org/tomcat-7.0-doc/config/ajp.html
 
+
+
+当程序主动使用某个类时，如果该类还未被加载到内存中，则JVM会通过加载、连接、初始化3个步骤来对该类进行初始化。如果没有意外，JVM将会连续完成3个步骤，所以有时也把这个3个步骤统称为类加载或类初始化。
+
+一、类加载过程
+
+![img](https://img-blog.csdn.net/20180813115150336?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L20wXzM4MDc1NDI1/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70)
+
+1.加载    
+
+    加载指的是将类的class文件读入到内存，并为之创建一个java.lang.Class对象，也就是说，当程序中使用任何类时，系统都会为之建立一个java.lang.Class对象。
+    
+    类的加载由类加载器完成，类加载器通常由JVM提供，这些类加载器也是前面所有程序运行的基础，JVM提供的这些类加载器通常被称为系统类加载器。除此之外，开发者可以通过继承ClassLoader基类来创建自己的类加载器。
+    
+    通过使用不同的类加载器，可以从不同来源加载类的二进制数据，通常有如下几种来源。
+    
+    从本地文件系统加载class文件，这是前面绝大部分示例程序的类加载方式。
+    从JAR包加载class文件，这种方式也是很常见的，前面介绍JDBC编程时用到的数据库驱动类就放在JAR文件中，JVM可以从JAR文件中直接加载该class文件。
+    通过网络加载class文件。
+    把一个Java源文件动态编译，并执行加载。
+    
+    类加载器通常无须等到“首次使用”该类时才加载该类，Java虚拟机规范允许系统预先加载某些类。
+2.链接
+
+    当类被加载之后，系统为之生成一个对应的Class对象，接着将会进入连接阶段，连接阶段负责把类的二进制数据合并到JRE中。类连接又可分为如下3个阶段。
+    
+    1)验证：验证阶段用于检验被加载的类是否有正确的内部结构，并和其他类协调一致。Java是相对C++语言是安全的语言，例如它有C++不具有的数组越界的检查。这本身就是对自身安全的一种保护。验证阶段是Java非常重要的一个阶段，它会直接的保证应用是否会被恶意入侵的一道重要的防线，越是严谨的验证机制越安全。验证的目的在于确保Class文件的字节流中包含信息符合当前虚拟机要求，不会危害虚拟机自身安全。其主要包括四种验证，文件格式验证，元数据验证，字节码验证，符号引用验证。
+    
+    四种验证做进一步说明：
+    
+    文件格式验证：主要验证字节流是否符合Class文件格式规范，并且能被当前的虚拟机加载处理。例如：主，次版本号是否在当前虚拟机处理的范围之内。常量池中是否有不被支持的常量类型。指向常量的中的索引值是否存在不存在的常量或不符合类型的常量。
+    
+    元数据验证：对字节码描述的信息进行语义的分析，分析是否符合java的语言语法的规范。
+    
+    字节码验证：最重要的验证环节，分析数据流和控制，确定语义是合法的，符合逻辑的。主要的针对元数据验证后对方法体的验证。保证类方法在运行时不会有危害出现。
+    
+    符号引用验证：主要是针对符号引用转换为直接引用的时候，是会延伸到第三解析阶段，主要去确定访问类型等涉及到引用的情况，主要是要保证引用一定会被访问到，不会出现类等无法访问的问题。
+
+   2)准备：类准备阶段负责为类的静态变量分配内存，并设置默认初始值。
+
+   3)解析：将类的二进制数据中的符号引用替换成直接引用。说明一下：符号引用：符号引用是以一组符号来描述所引用的目标，符号可以是任何的字面形式的字面量，只要不会出现冲突能够定位到就行。布局和内存无关。直接引用：是指向目标的指针，偏移量或者能够直接定位的句柄。该引用是和内存中的布局有关的，并且一定加载进来的。
+3.初始化
+
+    初始化是为类的静态变量赋予正确的初始值，准备阶段和初始化阶段看似有点矛盾，其实是不矛盾的，如果类中有语句：private static int a = 10，它的执行过程是这样的，首先字节码文件被加载到内存后，先进行链接的验证这一步骤，验证通过后准备阶段，给a分配内存，因为变量a是static的，所以此时a等于int类型的默认初始值0，即a=0,然后到解析（后面在说），到初始化这一步骤时，才把a的真正的值10赋给a,此时a=10。
+二、类加载时机
+
+    创建类的实例，也就是new一个对象
+    访问某个类或接口的静态变量，或者对该静态变量赋值
+    调用类的静态方法
+    反射（Class.forName("com.lyj.load")）
+    初始化一个类的子类（会首先初始化子类的父类）
+    JVM启动时标明的启动类，即文件名和类名相同的那个类    
+    
+     除此之外，下面几种情形需要特别指出：
+    
+     对于一个final类型的静态变量，如果该变量的值在编译时就可以确定下来，那么这个变量相当于“宏变量”。Java编译器会在编译时直接把这个变量出现的地方替换成它的值，因此即使程序使用该静态变量，也不会导致该类的初始化。反之，如果final类型的静态Field的值不能在编译时确定下来，则必须等到运行时才可以确定该变量的值，如果通过该类来访问它的静态变量，则会导致该类被初始化。
+三、类加载器
+
+    类加载器负责加载所有的类，其为所有被载入内存中的类生成一个java.lang.Class实例对象。一旦一个类被加载如JVM中，同一个类就不会被再次载入了。正如一个对象有一个唯一的标识一样，一个载入JVM的类也有一个唯一的标识。在Java中，一个类用其全限定类名（包括包名和类名）作为标识；但在JVM中，一个类用其全限定类名和其类加载器作为其唯一标识。例如，如果在pg的包中有一个名为Person的类，被类加载器ClassLoader的实例kl负责加载，则该Person类对应的Class对象在JVM中表示为(Person.pg.kl)。这意味着两个类加载器加载的同名类：（Person.pg.kl）和（Person.pg.kl2）是不同的、它们所加载的类也是完全不同、互不兼容的。
+
+   JVM预定义有三种类加载器，当一个 JVM启动的时候，Java开始使用如下三种类加载器：
+
+ 1)根类加载器（bootstrap class loader）:它用来加载 Java 的核心类，是用原生代码来实现的，并不继承自 java.lang.ClassLoader（负责加载$JAVA_HOME中jre/lib/rt.jar里所有的class，由C++实现，不是ClassLoader子类）。由于引导类加载器涉及到虚拟机本地实现细节，开发者无法直接获取到启动类加载器的引用，所以不允许直接通过引用进行操作。
+
+下面程序可以获得根类加载器所加载的核心类库,并会看到本机安装的Java环境变量指定的jdk中提供的核心jar包路径：
+
+```java
+public class ClassLoaderTest {
+ 
+	public static void main(String[] args) {
+		
+		URL[] urls = sun.misc.Launcher.getBootstrapClassPath().getURLs();
+		for(URL url : urls){
+			System.out.println(url.toExternalForm());
+		}
+	}
+}
+```
+
+运行结果：
+
+![img](https://img-blog.csdn.net/2018081314481932?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L20wXzM4MDc1NDI1/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70)
+
+  2)扩展类加载器（extensions class loader）：它负责加载JRE的扩展目录，lib/ext或者由java.ext.dirs系统属性指定的目录中的JAR包的类。由Java语言实现，父类加载器为null。
+
+  3)系统类加载器（system class loader）：被称为系统（也称为应用）类加载器，它负责在JVM启动时加载来自Java命令的-classpath选项、java.class.path系统属性，或者CLASSPATH换将变量所指定的JAR包和类路径。程序可以通过ClassLoader的静态方法getSystemClassLoader()来获取系统类加载器。如果没有特别指定，则用户自定义的类加载器都以此类加载器作为父加载器。由Java语言实现，父类加载器为ExtClassLoader。
+
+类加载器加载Class大致要经过如下8个步骤：
+
+    检测此Class是否载入过，即在缓冲区中是否有此Class，如果有直接进入第8步，否则进入第2步。
+    如果没有父类加载器，则要么Parent是根类加载器，要么本身就是根类加载器，则跳到第4步，如果父类加载器存在，则进入第3步。
+    请求使用父类加载器去载入目标类，如果载入成功则跳至第8步，否则接着执行第5步。
+    请求使用根类加载器去载入目标类，如果载入成功则跳至第8步，否则跳至第7步。
+    当前类加载器尝试寻找Class文件，如果找到则执行第6步，如果找不到则执行第7步。
+    从文件中载入Class，成功后跳至第8步。
+    抛出ClassNotFountException异常。
+    返回对应的java.lang.Class对象。
+
+四、类加载机制：
+
+1.JVM的类加载机制主要有如下3种。
+
+    全盘负责：所谓全盘负责，就是当一个类加载器负责加载某个Class时，该Class所依赖和引用其他Class也将由该类加载器负责载入，除非显示使用另外一个类加载器来载入。
+    双亲委派：所谓的双亲委派，则是先让父类加载器试图加载该Class，只有在父类加载器无法加载该类时才尝试从自己的类路径中加载该类。通俗的讲，就是某个特定的类加载器在接到加载类的请求时，首先将加载任务委托给父加载器，依次递归，如果父加载器可以完成类加载任务，就成功返回；只有父加载器无法完成此加载任务时，才自己去加载。
+    缓存机制。缓存机制将会保证所有加载过的Class都会被缓存，当程序中需要使用某个Class时，类加载器先从缓存区中搜寻该Class，只有当缓存区中不存在该Class对象时，系统才会读取该类对应的二进制数据，并将其转换成Class对象，存入缓冲区中。这就是为很么修改了Class后，必须重新启动JVM，程序所做的修改才会生效的原因。
+
+2.这里说明一下双亲委派机制：
+
+![img](https://img-blog.csdn.net/20180813145521896?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L20wXzM4MDc1NDI1/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70)
+
+       双亲委派机制，其工作原理的是，如果一个类加载器收到了类加载请求，它并不会自己先去加载，而是把这个请求委托给父类的加载器去执行，如果父类加载器还存在其父类加载器，则进一步向上委托，依次递归，请求最终将到达顶层的启动类加载器，如果父类加载器可以完成类加载任务，就成功返回，倘若父类加载器无法完成此加载任务，子加载器才会尝试自己去加载，这就是双亲委派模式，即每个儿子都很懒，每次有活就丢给父亲去干，直到父亲说这件事我也干不了时，儿子自己才想办法去完成。
+    
+      双亲委派机制的优势：采用双亲委派模式的是好处是Java类随着它的类加载器一起具备了一种带有优先级的层次关系，通过这种层级关可以避免类的重复加载，当父亲已经加载了该类时，就没有必要子ClassLoader再加载一次。其次是考虑到安全因素，java核心api中定义类型不会被随意替换，假设通过网络传递一个名为java.lang.Integer的类，通过双亲委托模式传递到启动类加载器，而启动类加载器在核心Java API发现这个名字的类，发现该类已被加载，并不会重新加载网络传递的过来的java.lang.Integer，而直接返回已加载过的Integer.class，这样便可以防止核心API库被随意篡改。
+## JVM性能调优监控工具jps、jstack、jmap、jhat、jstat、hprof使用详解
+
+现实企业级Java开发中，有时候我们会碰到下面这些问题： 
+
+-  OutOfMemoryError，内存不足 
+-  内存泄露 
+-  线程死锁 
+-  锁争用（Lock Contention） 
+-  Java进程消耗CPU过高 
+-  ...... 
+
+​    这些问题在日常开发中可能被很多人忽视（比如有的人遇到上面的问题只是重启服务器或者调大内存，而不会深究问题根源），但能够理解并解决这些问题是Java程序员进阶的必备要求。本文将对一些常用的JVM性能调优监控工具进行介绍，希望能起抛砖引玉之用。本文参考了网上很多资料，难以一一列举，在此对这些资料的作者表示感谢！关于JVM性能调优相关的资料，请参考文末。 
+
+ 
+  
+
+ **A、** jps(Java Virtual Machine Process Status Tool)    
+
+   jps主要用来输出JVM中运行的进程状态信息。语法格式如下： 
+
+```
+jps [options] [hostid]
+```
+
+   如果不指定hostid就默认为当前主机或服务器。 
+
+   命令行参数选项说明如下： 
+
+```
+-q 不输出类名、Jar名和传入main方法的参数
+-m 输出传入main方法的参数
+-l 输出main类或Jar的全限名
+-v 输出传入JVM的参数
+```
+
+   比如下面： 
+
+```
+root@ubuntu:/# jps -m -l
+2458 org.artifactory.standalone.main.Main /usr/local/artifactory-2.2.5/etc/jetty.xml
+29920 com.sun.tools.hat.Main -port 9998 /tmp/dump.dat
+3149 org.apache.catalina.startup.Bootstrap start
+30972 sun.tools.jps.Jps -m -l
+8247 org.apache.catalina.startup.Bootstrap start
+25687 com.sun.tools.hat.Main -port 9999 dump.dat
+21711 mrf-center.jar
+```
+
+ 
+ 
+
+ **B、** jstack 
+
+   jstack主要用来查看某个Java进程内的线程堆栈信息。语法格式如下： 
+
+```
+jstack [option] pid
+jstack [option] executable core
+jstack [option] [server-id@]remote-hostname-or-ip
+```
+
+   命令行参数选项说明如下： 
+
+```
+-l long listings，会打印出额外的锁信息，在发生死锁时可以用jstack -l pid来观察锁持有情况
+-m mixed mode，不仅会输出Java堆栈信息，还会输出C/C++堆栈信息（比如Native方法）
+```
+
+​    jstack可以定位到线程堆栈，根据堆栈信息我们可以定位到具体代码，所以它在JVM性能调优中使用得非常多。下面我们来一个实例找出某个Java进程中最耗费CPU的Java线程并定位堆栈信息，用到的命令有ps、top、printf、jstack、grep。 
+
+   第一步先找出Java进程ID，我部署在服务器上的Java应用名称为mrf-center： 
+
+```
+root@ubuntu:/# ps -ef | grep mrf-center | grep -v grep
+root     21711     1  1 14:47 pts/3    00:02:10 java -jar mrf-center.jar
+```
+
+   得到进程ID为21711，第二步找出该进程内最耗费CPU的线程，可以使用ps -Lfp pid或者ps -mp pid -o THREAD, tid, time或者top -Hp pid，我这里用第三个，输出如下： 
+
+ ![img](http://static.oschina.net/uploads/space/2014/0128/170402_A57i_111708.png) 
+
+   TIME列就是各个Java线程耗费的CPU时间，CPU时间最长的是线程ID为21742的线程，用 
+
+```
+printf "%x\n" 21742
+```
+
+   得到21742的十六进制值为54ee，下面会用到。   
+
+   OK，下一步终于轮到jstack上场了，它用来输出进程21711的堆栈信息，然后根据线程ID的十六进制值grep，如下： 
+
+```
+root@ubuntu:/# jstack 21711 | grep 54ee
+"PollIntervalRetrySchedulerThread" prio=10 tid=0x00007f950043e000 nid=0x54ee in Object.wait() [0x00007f94c6eda000]
+```
+
+   可以看到CPU消耗在PollIntervalRetrySchedulerThread这个类的Object.wait()，我找了下我的代码，定位到下面的代码： 
+
+```
+// Idle wait
+getLog().info("Thread [" + getName() + "] is idle waiting...");
+schedulerThreadState = PollTaskSchedulerThreadState.IdleWaiting;
+long now = System.currentTimeMillis();
+long waitTime = now + getIdleWaitTime();
+long timeUntilContinue = waitTime - now;
+synchronized(sigLock) {
+	try {
+    	if(!halted.get()) {
+    		sigLock.wait(timeUntilContinue);
+    	}
+    } 
+	catch (InterruptedException ignore) {
+    }
+}
+```
+
+   它是轮询任务的空闲等待代码，上面的sigLock.wait(timeUntilContinue)就对应了前面的Object.wait()。 
+
+ 
+ 
+
+ **C、** jmap（Memory Map）和jhat（Java Heap Analysis Tool） 
+
+   jmap用来查看堆内存使用状况，一般结合jhat使用。 
+
+   jmap语法格式如下： 
+
+```
+jmap [option] pid
+jmap [option] executable core
+jmap [option] [server-id@]remote-hostname-or-ip
+```
+
+   如果运行在64位JVM上，可能需要指定-J-d64命令选项参数。 
+
+```
+jmap -permstat pid
+```
+
+   打印进程的类加载器和类加载器加载的持久代对象信息，输出：类加载器名称、对象是否存活（不可靠）、对象地址、父类加载器、已加载的类大小等信息，如下图： 
+
+ ![img](http://static.oschina.net/uploads/space/2014/0128/172247_5UEj_111708.png) 
+
+   使用jmap -heap pid查看进程堆内存使用情况，包括使用的GC算法、堆配置参数和各代中堆内存使用情况。比如下面的例子： 
+
+```
+root@ubuntu:/# jmap -heap 21711
+Attaching to process ID 21711, please wait...
+Debugger attached successfully.
+Server compiler detected.
+JVM version is 20.10-b01
+
+using thread-local object allocation.
+Parallel GC with 4 thread(s)
+
+Heap Configuration:
+   MinHeapFreeRatio = 40
+   MaxHeapFreeRatio = 70
+   MaxHeapSize      = 2067791872 (1972.0MB)
+   NewSize          = 1310720 (1.25MB)
+   MaxNewSize       = 17592186044415 MB
+   OldSize          = 5439488 (5.1875MB)
+   NewRatio         = 2
+   SurvivorRatio    = 8
+   PermSize         = 21757952 (20.75MB)
+   MaxPermSize      = 85983232 (82.0MB)
+
+Heap Usage:
+PS Young Generation
+Eden Space:
+   capacity = 6422528 (6.125MB)
+   used     = 5445552 (5.1932830810546875MB)
+   free     = 976976 (0.9317169189453125MB)
+   84.78829520089286% used
+From Space:
+   capacity = 131072 (0.125MB)
+   used     = 98304 (0.09375MB)
+   free     = 32768 (0.03125MB)
+   75.0% used
+To Space:
+   capacity = 131072 (0.125MB)
+   used     = 0 (0.0MB)
+   free     = 131072 (0.125MB)
+   0.0% used
+PS Old Generation
+   capacity = 35258368 (33.625MB)
+   used     = 4119544 (3.9287033081054688MB)
+   free     = 31138824 (29.69629669189453MB)
+   11.683876009235595% used
+PS Perm Generation
+   capacity = 52428800 (50.0MB)
+   used     = 26075168 (24.867218017578125MB)
+   free     = 26353632 (25.132781982421875MB)
+   49.73443603515625% used
+   ....
+```
+
+   使用jmap -histo[:live] pid查看堆内存中的对象数目、大小统计直方图，如果带上live则只统计活对象，如下： 
+
+```
+root@ubuntu:/# jmap -histo:live 21711 | more
+
+ num     #instances         #bytes  class name
+----------------------------------------------
+   1:         38445        5597736  <constMethodKlass>
+   2:         38445        5237288  <methodKlass>
+   3:          3500        3749504  <constantPoolKlass>
+   4:         60858        3242600  <symbolKlass>
+   5:          3500        2715264  <instanceKlassKlass>
+   6:          2796        2131424  <constantPoolCacheKlass>
+   7:          5543        1317400  [I
+   8:         13714        1010768  [C
+   9:          4752        1003344  [B
+  10:          1225         639656  <methodDataKlass>
+  11:         14194         454208  java.lang.String
+  12:          3809         396136  java.lang.Class
+  13:          4979         311952  [S
+  14:          5598         287064  [[I
+  15:          3028         266464  java.lang.reflect.Method
+  16:           280         163520  <objArrayKlassKlass>
+  17:          4355         139360  java.util.HashMap$Entry
+  18:          1869         138568  [Ljava.util.HashMap$Entry;
+  19:          2443          97720  java.util.LinkedHashMap$Entry
+  20:          2072          82880  java.lang.ref.SoftReference
+  21:          1807          71528  [Ljava.lang.Object;
+  22:          2206          70592  java.lang.ref.WeakReference
+  23:           934          52304  java.util.LinkedHashMap
+  24:           871          48776  java.beans.MethodDescriptor
+  25:          1442          46144  java.util.concurrent.ConcurrentHashMap$HashEntry
+  26:           804          38592  java.util.HashMap
+  27:           948          37920  java.util.concurrent.ConcurrentHashMap$Segment
+  28:          1621          35696  [Ljava.lang.Class;
+  29:          1313          34880  [Ljava.lang.String;
+  30:          1396          33504  java.util.LinkedList$Entry
+  31:           462          33264  java.lang.reflect.Field
+  32:          1024          32768  java.util.Hashtable$Entry
+  33:           948          31440  [Ljava.util.concurrent.ConcurrentHashMap$HashEntry;
+```
+
+   class name是对象类型，说明如下： 
+
+```
+B  byte
+C  char
+D  double
+F  float
+I  int
+J  long
+Z  boolean
+[  数组，如[I表示int[]
+[L+类名 其他对象
+```
+
+   还有一个很常用的情况是：用jmap把进程内存使用情况dump到文件中，再用jhat分析查看。jmap进行dump命令格式如下： 
+
+```
+jmap -dump:format=b,file=dumpFileName pid
+```
+
+   我一样地对上面进程ID为21711进行Dump： 
+
+```
+root@ubuntu:/# jmap -dump:format=b,file=/tmp/dump.dat 21711     
+Dumping heap to /tmp/dump.dat ...
+Heap dump file created
+```
+
+   dump出来的文件可以用MAT、VisualVM等工具查看，这里用jhat查看： 
+
+```
+root@ubuntu:/# jhat -port 9998 /tmp/dump.dat
+Reading from /tmp/dump.dat...
+Dump file created Tue Jan 28 17:46:14 CST 2014
+Snapshot read, resolving...
+Resolving 132207 objects...
+Chasing references, expect 26 dots..........................
+Eliminating duplicate references..........................
+Snapshot resolved.
+Started HTTP server on port 9998
+Server is ready.
+```
+
+​    注意如果Dump文件太大，可能需要加上-J-Xmx512m这种参数指定最大堆内存，即jhat -J-Xmx512m -port 9998 /tmp/dump.dat。然后就可以在浏览器中输入主机地址:9998查看了： 
+
+ ![img](http://static.oschina.net/uploads/space/2014/0128/174715_FTKZ_111708.png) 
+
+   上面红线框出来的部分大家可以自己去摸索下，最后一项支持OQL（对象查询语言）。 
+
+ 
+ 
+
+ **D、**jstat（JVM统计监测工具） 
+
+   语法格式如下： 
+
+```
+jstat [ generalOption | outputOptions vmid [interval[s|ms] [count]] ]
+```
+
+   vmid是Java虚拟机ID，在Linux/Unix系统上一般就是进程ID。interval是采样时间间隔。count是采样数目。比如下面输出的是GC信息，采样时间间隔为250ms，采样数为4： 
+
+```
+root@ubuntu:/# jstat -gc 21711 250 4
+ S0C    S1C    S0U    S1U      EC       EU        OC         OU       PC     PU    YGC     YGCT    FGC    FGCT     GCT   
+192.0  192.0   64.0   0.0    6144.0   1854.9   32000.0     4111.6   55296.0 25472.7    702    0.431   3      0.218    0.649
+192.0  192.0   64.0   0.0    6144.0   1972.2   32000.0     4111.6   55296.0 25472.7    702    0.431   3      0.218    0.649
+192.0  192.0   64.0   0.0    6144.0   1972.2   32000.0     4111.6   55296.0 25472.7    702    0.431   3      0.218    0.649
+192.0  192.0   64.0   0.0    6144.0   2109.7   32000.0     4111.6   55296.0 25472.7    702    0.431   3      0.218    0.649
+```
+
+   要明白上面各列的意义，先看JVM堆内存布局： 
+
+ ![img](http://static.oschina.net/uploads/space/2014/0128/181847_dAR9_111708.jpg) 
+
+   可以看出： 
+
+```
+堆内存 = 年轻代 + 年老代 + 永久代
+年轻代 = Eden区 + 两个Survivor区（From和To）
+```
+
+   现在来解释各列含义： 
+
+```
+S0C、S1C、S0U、S1U：Survivor 0/1区容量（Capacity）和使用量（Used）
+EC、EU：Eden区容量和使用量
+OC、OU：年老代容量和使用量
+PC、PU：永久代容量和使用量
+YGC、YGT：年轻代GC次数和GC耗时
+FGC、FGCT：Full GC次数和Full GC耗时
+GCT：GC总耗时
+```
+
+ 
+ 
+
+ **E、**hprof（Heap/CPU Profiling Tool） 
+
+   hprof能够展现CPU使用率，统计堆内存使用情况。 
+
+   语法格式如下： 
+
+```
+java -agentlib:hprof[=options] ToBeProfiledClass
+java -Xrunprof[:options] ToBeProfiledClass
+javac -J-agentlib:hprof[=options] ToBeProfiledClass
+```
+
+   完整的命令选项如下： 
+
+```
+Option Name and Value  Description                    Default
+---------------------  -----------                    -------
+heap=dump|sites|all    heap profiling                 all
+cpu=samples|times|old  CPU usage                      off
+monitor=y|n            monitor contention             n
+format=a|b             text(txt) or binary output     a
+file=<file>            write data to file             java.hprof[.txt]
+net=<host>:<port>      send data over a socket        off
+depth=<size>           stack trace depth              4
+interval=<ms>          sample interval in ms          10
+cutoff=<value>         output cutoff point            0.0001
+lineno=y|n             line number in traces?         y
+thread=y|n             thread in traces?              n
+doe=y|n                dump on exit?                  y
+msa=y|n                Solaris micro state accounting n
+force=y|n              force output to <file>         y
+verbose=y|n            print messages about dumps     y
+```
+
+   来几个官方指南上的实例。 
+
+   CPU Usage Sampling Profiling(cpu=samples)的例子： 
+
+```
+java -agentlib:hprof=cpu=samples,interval=20,depth=3 Hello
+```
+
+   上面每隔20毫秒采样CPU消耗信息，堆栈深度为3，生成的profile文件名称是java.hprof.txt，在当前目录。 
+
+   CPU Usage Times Profiling(cpu=times)的例子，它相对于CPU Usage Sampling  Profile能够获得更加细粒度的CPU消耗信息，能够细到每个方法调用的开始和结束，它的实现使用了字节码注入技术（BCI）： 
+
+```
+javac -J-agentlib:hprof=cpu=times Hello.java
+```
+
+   Heap Allocation Profiling(heap=sites)的例子： 
+
+```
+javac -J-agentlib:hprof=heap=sites Hello.java
+```
+
+   Heap Dump(heap=dump)的例子，它比上面的Heap Allocation Profiling能生成更详细的Heap Dump信息： 
+
+```
+javac -J-agentlib:hprof=heap=dump Hello.java
+```
+
+   **虽然在JVM启动参数中加入-Xrunprof:heap=sites参数可以生成CPU/Heap Profile文件，但对JVM性能影响非常大，不建议在线上服务器环境使用。** 
+
+
+
