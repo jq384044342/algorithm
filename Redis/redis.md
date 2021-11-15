@@ -2044,4 +2044,157 @@ Julia Evans在文章最后得出的结论是：
 
 
 
-------
+# Redis的事务功能详解
+
+Redis中的事务是可以视为一个队列，即我们可以通过MULTI开始一个事务，这相当于我们声明了一个命令队列。接下来，我们向Redis中提交的每条命令，都会被排入这个命令队列。当我们输入EXEC命令时，将触发当前事务，这相当于我们从命令队列中取出命令并执行，所以Redis中一个事务从开始到执行会经历 **开始事务** 、 **命令入队** 和 **执行事务** 三个阶段。下面是一个在Redis中使用事务的简单示例：
+
+```text
+127.0.0.1:6379> MULTI 
+OK 
+127.0.0.1:6379> SET Book_Name "GIt Pro" 
+QUEUED 
+127.0.0.1:6379> SADD Program_Language "C++" "C#" "Jave" "Python"  
+QUEUED 
+127.0.0.1:6379> GET Book_Name 
+QUEUED 
+127.0.0.1:6379> EXEC 
+1) OK 
+2) (integer) 4 
+3) "GIt Pro" 
+```
+
+我们可以注意到Redis中的事务和通常意义上的事务基本上是一致的，即
+
+- 事务是由一系列操作组成的单个逻辑工作执行单元。特别地，因为在Redis中命令是存储在一个队列中，所以，事务中的所有命令都会按顺序执行，并且在执行事务的过程中不会被客户端发送的其它命令中断。
+- 事务是一个原子操作，事物中的命令只有两种执行结果，即全部执行或者全部不执行。如果客户端在使用MULTI命令开启事务后因为意外而没有执行EXEC命令，则事务中的所有命令都不会执行。同理，如果客户端在使用MULTI命令开启事务后执行EXEC命令，则事务中的所有命令都会执行。
+- Redis中的事务可以使用DISCARD命令来清空一个命令队列，并放弃对事务的执行。如果命令在入队时发生错误，Redis将在客户端调用EXEC命令时拒绝执行并取消事务，但是在EXEC命令执行后发生的错误，Redis将选择自动忽略。
+
+## 3.redis事务执行过程
+
+一个事务从开始到执行会经历以下三个阶段：
+
+- 1）开始事务。
+- 2）命令入队。
+- 3）执行事务。
+
+下面将分别介绍事务的这三个阶段。
+
+**1）开始事务**
+
+MULTI命令的执行标记着事务的开始：
+
+```text
+redis> MULTI
+OK
+```
+
+这个命令唯一做的就是， 将客户端的 `REDIS_MULTI` 选项打开， 让客户端从非事务状态切换到事务状态。
+
+![img](https://pic4.zhimg.com/80/v2-09ea7d6280a7a3a238f77f2c34d6cbaf_720w.jpg)图1 客户端状态转换
+
+**2）命令入队**
+
+当客户端处于非事务状态下时， 所有发送给服务器端的命令都会立即被服务器执行：
+
+```text
+redis> SET msg "hello moto"
+OK
+
+redis> GET msg
+"hello moto"
+```
+
+但是， 当客户端进入事务状态之后， 服务器在收到来自客户端的命令时， 不会立即执行命令， 而是将这些命令全部放进一个事务队列里， 然后返回`QUEUED`， 表示命令已入队：
+
+```text
+redis> MULTI
+OK
+
+redis> SET msg "hello moto"
+QUEUED
+
+redis> GET msg
+QUEUED
+```
+
+其原理如图2所示
+
+![img](https://pic2.zhimg.com/80/v2-33f834fbbacea422b8f94647e3429e19_720w.jpg)图2. 命令入队
+
+**3）执行事务**
+
+前面说到， 当客户端进入事务状态之后， 客户端发送的命令就会被放进事务队列里。
+
+但其实并不是所有的命令都会被放进事务队列， 其中的例外就是 [EXEC](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/exec.html%23exec) 、 [DISCARD](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/discard.html%23discard) 、 [MULTI](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/multi.html%23multi) 和 [WATCH](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/watch.html%23watch) 这四个命令 —— 当这四个命令从客户端发送到服务器时， 它们会像客户端处于非事务状态一样， 直接被服务器执行：
+
+![img](https://pic4.zhimg.com/80/v2-77de615083f796ba3f21bbd10880c22f_720w.jpg)图3  执行事务
+
+如果客户端正处于事务状态， 那么当[EXEC](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/exec.html%23exec)命令执行时， 服务器根据客户端所保存的事务队列， 以先进先出（FIFO）的方式执行事务队列中的命令： 最先入队的命令最先执行， 而最后入队的命令最后执行。
+
+执行事务中的命令所得的结果会以 FIFO 的顺序保存到一个回复队列中。
+
+当事务队列里的所有命令被执行完之后，[EXEC](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/exec.html%23exec)命令会将回复队列作为自己的执行结果返回给客户端， 客户端从事务状态返回到非事务状态， 至此， 事务执行完毕。
+
+## 4.redis事务命令
+
+redis事务使用了multi、exec、discard、watch、unwatch命令，命令的作用如图4所示：
+
+![img](https://pic1.zhimg.com/80/v2-487883118b6d7a37aad01f640b3e2920_720w.jpg)图4 事务命令
+
+使用案例：
+
+- **正常执行**
+
+![img](https://pic2.zhimg.com/80/v2-af258f3cab115240d55b07bf372024b5_720w.jpg)图5.  正常执行
+
+- **放弃事务**
+
+![img](https://pic4.zhimg.com/80/v2-67def90b58a5f3595463720323df510b_720w.jpg)图6 放弃事务
+
+- **若在事务队列中存在命令性错误，则执行EXEC命令时，所有命令都不会执行**
+
+![img](https://pic2.zhimg.com/80/v2-08c79bc6dcf3bed8a65c19970e69c6e9_720w.jpg)图7 命令错误
+
+- **若在事务队列中存在语法性错误，则执行EXEC命令时，其他正确命令会被执行，错误命令抛出异常。**
+
+![img](https://pic4.zhimg.com/80/v2-46adb9c31b801f9f02dff07918bd0cab_720w.jpg)图8 语法错误
+
+- **使用watch**
+
+使用watch检测balance，事务期间balance数据未变动，事务执行成功
+
+![img](https://pic1.zhimg.com/80/v2-50b1e602a964a68f344b174803ae24bc_720w.jpg)图9 watch用法1
+
+[WATCH](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/watch.html%23watch)命令用于在事务开始之前监视任意数量的键： 当调用[EXEC](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/exec.html%23exec)命令执行事务时， 如果任意一个被监视的键已经被其他客户端修改了， 那么整个事务不再执行， 直接返回失败。
+
+![img](https://pic4.zhimg.com/80/v2-3f9e579968c34bb051888f4b44238c4f_720w.jpg)图10 watch用法2
+
+![img](https://pic1.zhimg.com/80/v2-24f26cbc40f663e0f3c0bef2cbd528c0_720w.jpg)图11 修改balance
+
+- **WATCH 命令的实现**
+
+在每个代表数据库的 `redis.h/redisDb` 结构类型中， 都保存了一个 `watched_keys` 字典， 字典的键是这个数据库被监视的键， 而字典的值则是一个链表， 链表中保存了所有监视这个键的客户端。
+
+比如说，以下字典就展示了一个 `watched_keys` 字典的例子：
+
+![img](https://pic1.zhimg.com/80/v2-9b20e75cafb1517b23fdb70f7d95ec4c_720w.jpg)图11 watch实现的原理
+
+其中， 键 `key1` 正在被 `client2` 、 `client5` 和 `client1` 三个客户端监视， 其他一些键也分别被其他别的客户端监视着。
+
+[WATCH](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/watch.html%23watch) 命令的作用， 就是将当前客户端和要监视的键在 `watched_keys` 中进行关联。
+
+举个例子， 如果当前客户端为 `client10086` ， 那么当客户端执行 `WATCH` `key1` `key2` 时， 前面展示的 `watched_keys` 将被修改成这个样子：
+
+![img](https://pic2.zhimg.com/80/v2-13f79f40d309f13c7caa3fc43f110891_720w.jpg)图12  watch实现原理2
+
+通过`watched_keys`字典， 如果程序想检查某个键是否被监视， 那么它只要检查字典中是否存在这个键即可； 如果程序要获取监视某个键的所有客户端， 那么只要取出键的值（一个链表）， 然后对链表进行遍历即可。
+
+- **watch的触发**
+  在任何对数据库键空间（key space）进行修改的命令成功执行之后 （比如[FLUSHDB](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/server/flushdb.html%23flushdb)、[SET](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/string/set.html%23set)、[DEL](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/key/del.html%23del)、[LPUSH](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/list/lpush.html%23lpush)、[SADD](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/set/sadd.html%23sadd)、[ZREM](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/sorted_set/zrem.html%23zrem)，诸如此类），`multi.c/touchWatchedKey`函数都会被调用 —— 它检查数据库的`watched_keys`字典， 看是否有客户端在监视已经被命令修改的键， 如果有的话， 程序将所有监视这个/这些被修改键的客户端的`REDIS_DIRTY_CAS`选项打开：
+
+![img](https://pic1.zhimg.com/80/v2-da8f4dc62637ee686dd9ef466056ca8c_720w.jpg)图13 watch的触发
+
+当客户端发送 [EXEC](https://link.zhihu.com/?target=http%3A//redis.readthedocs.org/en/latest/transaction/exec.html%23exec) 命令、触发事务执行时， 服务器会对客户端的状态进行检查：
+
+- 如果客户端的 `REDIS_DIRTY_CAS` 选项已经被打开，那么说明被客户端监视的键至少有一个已经被修改了，事务的安全性已经被破坏。服务器会放弃执行这个事务，直接向客户端返回空回复，表示事务执行失败。
+- 如果 `REDIS_DIRTY_CAS` 选项没有被打开，那么说明所有监视键都安全，服务器正式执行事务。
